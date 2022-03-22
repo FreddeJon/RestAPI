@@ -27,6 +27,7 @@ namespace RestAPI.Auth
                 signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
                 );
 
+
             return token;
         }
     }
