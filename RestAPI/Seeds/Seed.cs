@@ -1,11 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using RestAPI.Auth;
 using RestAPI.Auth.Models;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace RestAPI.Seeds
 {
@@ -18,68 +14,62 @@ namespace RestAPI.Seeds
                 var userManager = scope.ServiceProvider.GetService<UserManager<ApplicationUser>>();
                 var roleManager = scope.ServiceProvider.GetService<RoleManager<IdentityRole>>();
                 var context = scope.ServiceProvider.GetService<ApplicationDbContext>();
+                var configuration = serviceProvider.GetService<IConfiguration>();
 
-                if (userManager is null || roleManager is null || context is null) return;
-
-                context!.Database.EnsureCreated();
-
-                if (!roleManager!.RoleExistsAsync(UserRoles.User).Result)
+                if (userManager is null || roleManager is null || context is null || configuration is null)
                 {
-                    await roleManager!.CreateAsync(new IdentityRole(UserRoles.User));
-                }
-                if (!roleManager!.RoleExistsAsync(UserRoles.Admin).Result)
-                {
-                    await roleManager!.CreateAsync(new IdentityRole(UserRoles.Admin));
+                    throw new ArgumentNullException();
                 }
 
-                var email = "admin@admin";
-                var password = "admin";
 
-                var admin = await userManager.FindByEmailAsync(email);
+                context!.Database.Migrate();
 
-                if (admin is not null) return;
 
-                var newAdmin = new ApplicationUser()
-                {
-                    Email = email,
-                    UserName = "admin"
-                };
+                await SeedRoles(roleManager);
 
-               await userManager.CreateAsync(newAdmin, password);
-
-               await userManager.AddToRolesAsync(newAdmin, new List<string>() { UserRoles.Admin, UserRoles.User });
+                await SeedAdmin(userManager, configuration);
             }
         }
-        private static async void SeedRoles(RoleManager<IdentityRole> roleManager)
+        private static async Task SeedRoles(RoleManager<IdentityRole> roleManager)
         {
-            if (!roleManager!.RoleExistsAsync(UserRoles.User).Result)
+            if ( !await roleManager.RoleExistsAsync(ApplicationRoles.User))
             {
-                await roleManager!.CreateAsync(new IdentityRole(UserRoles.User));
+                await roleManager.CreateAsync(new IdentityRole(ApplicationRoles.User));
             }
-            if (!roleManager!.RoleExistsAsync(UserRoles.Admin).Result)
+            if (!await roleManager.RoleExistsAsync(ApplicationRoles.Admin))
             {
-                await roleManager!.CreateAsync(new IdentityRole(UserRoles.Admin));
+                await roleManager.CreateAsync(new IdentityRole(ApplicationRoles.Admin));
             }
+            return;
         }
 
-        private static async void SeedAdmin( UserManager<ApplicationUser> userManager)
+        private static async Task SeedAdmin(UserManager<ApplicationUser> userManager, IConfiguration configuration)
         {
-            var email = "admin@admin";
-            var password = "admin";
+            var email = configuration!["ADMIN:EMAIL"] ?? "admin@admin";
+            var userName = configuration!["ADMIN:USERNAME"] ?? "admin";
+            var password = configuration!["ADMIN:PASSWORD"] ?? "admin";
 
             var admin = await userManager.FindByEmailAsync(email);
 
             if (admin is not null) return;
 
-            var newAdmin = new ApplicationUser()
+            var adminUser = new ApplicationUser()
             {
                 Email = email,
-                UserName = "admin"
+                UserName = userName
             };
 
-             userManager.CreateAsync(newAdmin, password).GetAwaiter();
+            var created = await userManager.CreateAsync(adminUser, password);
 
-             userManager.AddToRolesAsync(newAdmin, new List<string>() { UserRoles.Admin, UserRoles.User }).GetAwaiter();
+
+            if (created.Succeeded)
+            {
+                var confirmationToken = userManager.GenerateEmailConfirmationTokenAsync(adminUser).Result;
+                await userManager.ConfirmEmailAsync(adminUser, confirmationToken);
+                await userManager.AddToRolesAsync(adminUser, new List<string>() { ApplicationRoles.Admin, ApplicationRoles.User });
+            }
+
+            return;
         }
     }
 }

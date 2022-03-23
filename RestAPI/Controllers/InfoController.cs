@@ -13,7 +13,7 @@ namespace RestAPI.Controllers
     {
        
         [HttpGet("Me")]
-        [Authorize(Roles = UserRoles.User)]
+        [Authorize(Roles = ApplicationRoles.User)]
         public IActionResult Me()
         {
             var jwtSecurityToken = HttpContext.GetTokenAsync("Bearer", "access_token").Result;
@@ -28,7 +28,7 @@ namespace RestAPI.Controllers
         }    
         
         [HttpGet("AdminMe")]
-        [Authorize(Roles = UserRoles.Admin)]
+        [Authorize(Roles = ApplicationRoles.Admin)]
         public IActionResult AdminMe()
         {
             var jwtSecurityToken = HttpContext.GetTokenAsync("Bearer", "access_token").Result;

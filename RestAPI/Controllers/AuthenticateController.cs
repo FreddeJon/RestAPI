@@ -88,7 +88,7 @@ namespace RestAPI.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { Status = "Error", Message = "User creation failed! Please check user details and try again.", Errors = result.Errors.Select(x => x.Description).ToList() });
             }
 
-            await _userManager.AddToRoleAsync(user, UserRoles.User);
+            await _userManager.AddToRoleAsync(user, ApplicationRoles.User);
 
             return Ok(new { Status = "Success", Message = "User created successfully!" });
         }
@@ -97,44 +97,54 @@ namespace RestAPI.Controllers
         [Route("refresh-token")]
         public async Task<IActionResult> RefreshToken(TokenModel tokenModel)
         {
-            if (tokenModel is null || tokenModel.AccessToken is null || tokenModel.RefreshToken is null)
+
+
+            try
             {
-                return BadRequest("Invalid client request");
+                if (tokenModel is null || string.IsNullOrEmpty(tokenModel.AccessToken) || string.IsNullOrEmpty(tokenModel.RefreshToken))
+                {
+                    return BadRequest("Invalid client request");
+                }
+
+                var handler = new JwtSecurityTokenHandler();
+                var token = handler.ReadJwtToken(tokenModel.AccessToken);
+
+
+                if (token == null)
+                {
+                    throw new ArgumentNullException();
+                }
+
+                var user = await _userManager.FindByIdAsync(token.Subject);
+
+                if (user == null || user.RefreshToken != tokenModel.RefreshToken || user.RefreshTokenExpiryTime <= DateTime.Now)
+                {
+                    throw new ArgumentNullException();
+                }
+
+                var newAccessToken = _authService.CreateToken(token.Claims.ToList());
+                var newRefreshToken = _authService.GenerateRefreshToken();
+
+                user.RefreshToken = newRefreshToken;
+                await _userManager.UpdateAsync(user);
+
+                return new ObjectResult(new
+                {
+                    accessToken = new JwtSecurityTokenHandler().WriteToken(newAccessToken),
+                    refreshToken = newRefreshToken,
+                    expiration = newAccessToken.ValidTo
+                });
             }
-
-            string? accessToken = tokenModel.AccessToken;
-            string? refreshToken = tokenModel.RefreshToken;
-
-            var handler = new JwtSecurityTokenHandler();
-            var token = handler.ReadJwtToken(accessToken);
-
-
-            if (token == null)
+            catch (Exception)
             {
+
                 return BadRequest("Invalid access token or refresh token");
             }
 
 
 
-            var user = await _userManager.FindByIdAsync(token.Subject);
 
-            if (user == null || user.RefreshToken != refreshToken || user.RefreshTokenExpiryTime <= DateTime.Now)
-            {
-                return BadRequest("Invalid access token or refresh token");
-            }
 
-            var newAccessToken = _authService.CreateToken(token.Claims.ToList());
-            var newRefreshToken = _authService.GenerateRefreshToken();
-
-            user.RefreshToken = newRefreshToken;
-            await _userManager.UpdateAsync(user);
-
-            return new ObjectResult(new
-            {
-                accessToken = new JwtSecurityTokenHandler().WriteToken(newAccessToken),
-                refreshToken = newRefreshToken,
-                expiration = newAccessToken.ValidTo
-            });
         }
     }
 

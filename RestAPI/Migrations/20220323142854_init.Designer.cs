@@ -12,7 +12,7 @@ using RestAPI.Auth;
 namespace RestAPI.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20220322220038_init")]
+    [Migration("20220323142854_init")]
     partial class init
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -202,7 +202,7 @@ namespace RestAPI.Migrations
                     b.Property<string>("RefreshToken")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime>("RefreshTokenExpiryTime")
+                    b.Property<DateTime?>("RefreshTokenExpiryTime")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("SecurityStamp")

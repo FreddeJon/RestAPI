@@ -69,7 +69,7 @@ namespace RestAPI.Auth
 
         
 
-        public ClaimsPrincipal? GetPrincipalFromExpiredToken(string? token)
+        public ClaimsPrincipal GetPrincipalFromExpiredToken(string? token)
         {
             var tokenValidationParameters = new TokenValidationParameters
             {
