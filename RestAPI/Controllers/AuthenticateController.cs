@@ -12,46 +12,55 @@ namespace RestAPI.Controllers
     [ApiController]
     public class AuthenticateController : ControllerBase
     {
-        private readonly UserManager<IdentityUser> _userManager;
+        private readonly UserManager<ApplicationUser> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
-        private readonly IJwtGeneration _jwtGeneration;
+        private readonly IAuthService _authService;
+        private readonly IConfiguration _configuration;
 
-        public AuthenticateController(UserManager<IdentityUser> userManager, RoleManager<IdentityRole> roleManager, IJwtGeneration jwtGeneration)
+        public AuthenticateController(
+            UserManager<ApplicationUser> userManager,
+            RoleManager<IdentityRole> roleManager,
+            IAuthService authService,
+            IConfiguration configuration)
         {
             _userManager = userManager;
             _roleManager = roleManager;
-            _jwtGeneration = jwtGeneration;
+            _authService = authService;
+            _configuration = configuration;
         }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login(LoginModel model)
         {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
 
-            var user = await _userManager.FindByNameAsync(model.Username);
-            if (user != null && await _userManager.CheckPasswordAsync(user, model.Password))
+
+            var user = await _userManager.FindByEmailAsync(model.Email);
+
+
+            if (!await _authService.ValidateUser(user, model.Password!)) return Unauthorized();
+
+            var claims = await _authService.GetClaimsForUser(user);
+
+
+            var token = _authService.CreateToken(claims);
+            var refreshToken = _authService.GenerateRefreshToken();
+
+
+            _ = int.TryParse(_configuration["JWT:RefreshTokenValidityInDays"], out int refreshTokenValidityInDays);
+
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DateTime.Now.AddDays(refreshTokenValidityInDays);
+
+           _ = await _userManager.UpdateAsync(user);
+
+            return Ok(new
             {
-                var userRoles = await _userManager.GetRolesAsync(user);
+                AccessToken = new JwtSecurityTokenHandler().WriteToken(token),
+                RefreshToken = refreshToken,
+                Expiration = token.ValidTo
+            });
 
-                var authClaims = new List<Claim>
-                {
-                    new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                };
-
-                foreach (var userRole in userRoles)
-                {
-                    authClaims.Add(new Claim(ClaimTypes.Role, userRole));
-                }
-
-                var token = _jwtGeneration.GenerateJWTToken(authClaims);
-
-                return Ok(new
-                {
-                    token = new JwtSecurityTokenHandler().WriteToken(token),
-                    expiration = token.ValidTo
-                });
-            }
-            return Unauthorized();
         }
 
 
@@ -62,18 +71,63 @@ namespace RestAPI.Controllers
             if (userExists != null)
                 return StatusCode(StatusCodes.Status500InternalServerError, new ResponseModel { Status = "Error", Message = "User already exists!" });
 
-            IdentityUser user = new()
+            ApplicationUser user = new()
             {
                 Email = model.Email,
                 SecurityStamp = Guid.NewGuid().ToString(),
                 UserName = model.Username
             };
             var result = await _userManager.CreateAsync(user, model.Password);
-            if (!result.Succeeded) { 
+            if (!result.Succeeded)
+            {
                 return StatusCode(StatusCodes.Status500InternalServerError, new ResponseModel { Status = "Error", Message = "User creation failed! Please check user details and try again.", Errors = result.Errors.Select(x => x.Description).ToList() });
             }
 
             return Ok(new ResponseModel { Status = "Success", Message = "User created successfully!" });
+        }
+
+        [HttpPost]
+        [Route("refresh-token")]
+        public async Task<IActionResult> RefreshToken(TokenModel tokenModel)
+        {
+            if (tokenModel is null || tokenModel.AccessToken is null || tokenModel.RefreshToken is null)
+            {
+                return BadRequest("Invalid client request");
+            }
+
+            string? accessToken = tokenModel.AccessToken;
+            string? refreshToken = tokenModel.RefreshToken;
+
+            var handler = new JwtSecurityTokenHandler();
+            var token = handler.ReadJwtToken(accessToken);
+
+
+            if (token == null)
+            {
+                return BadRequest("Invalid access token or refresh token");
+            }
+
+
+
+            var user = await _userManager.FindByIdAsync(token.Subject);
+
+            if (user == null || user.RefreshToken != refreshToken || user.RefreshTokenExpiryTime <= DateTime.Now)
+            {
+                return BadRequest("Invalid access token or refresh token");
+            }
+
+            var newAccessToken = _authService.CreateToken(token.Claims.ToList());
+            var newRefreshToken = _authService.GenerateRefreshToken();
+
+            user.RefreshToken = newRefreshToken;
+            await _userManager.UpdateAsync(user);
+
+            return new ObjectResult(new
+            {
+                accessToken = new JwtSecurityTokenHandler().WriteToken(newAccessToken),
+                refreshToken = newRefreshToken,
+                expiration = newAccessToken.ValidTo
+            });
         }
     }
 
