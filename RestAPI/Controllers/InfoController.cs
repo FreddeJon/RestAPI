@@ -8,7 +8,7 @@ namespace RestAPI.Controllers
 {
     [Authorize]
     [ApiController]
-    [Route("[controller]")]
+    [Route("Api/[controller]")]
     public class InfoController : ControllerBase
     {
        

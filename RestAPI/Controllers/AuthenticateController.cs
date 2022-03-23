@@ -8,28 +8,25 @@ using System.Security.Claims;
 
 namespace RestAPI.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("Api/[controller]")]
     [ApiController]
     public class AuthenticateController : ControllerBase
     {
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IAuthService _authService;
         private readonly IConfiguration _configuration;
 
         public AuthenticateController(
             UserManager<ApplicationUser> userManager,
-            RoleManager<IdentityRole> roleManager,
             IAuthService authService,
             IConfiguration configuration)
         {
             _userManager = userManager;
-            _roleManager = roleManager;
             _authService = authService;
             _configuration = configuration;
         }
 
-        [HttpPost("login")]
+        [HttpPost("Login")]
         public async Task<IActionResult> Login(LoginModel model)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
@@ -66,12 +63,20 @@ namespace RestAPI.Controllers
         }
 
 
-        [HttpPost("register")]
+        [HttpPost("Register")]
         public async Task<IActionResult> Register(RegisterModel model)
         {
-            var userExists = await _userManager.FindByNameAsync(model.Username);
+            var userExists = await _userManager.FindByEmailAsync(model.Email);
             if (userExists != null)
-                return StatusCode(StatusCodes.Status500InternalServerError, new { Status = "Error", Message = "User already exists!" });
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { Status = "Error", Message = "Email already in use!" });
+            }
+            userExists = await _userManager.FindByNameAsync(model.Username);
+            if (userExists != null)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { Status = "Error", Message = "Username already exists!" });
+            }
+
 
             ApplicationUser user = new()
             {
@@ -85,20 +90,19 @@ namespace RestAPI.Controllers
 
             if (!result.Succeeded)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, new { Status = "Error", Message = "User creation failed! Please check user details and try again.", Errors = result.Errors.Select(x => x.Description).ToList() });
+                return StatusCode(StatusCodes.Status500InternalServerError, new { Status = "Error", Message = "User creation failed!", Errors = result.Errors.Select(x => x.Description).ToList() });
             }
 
             await _userManager.AddToRoleAsync(user, ApplicationRoles.User);
 
-            return Ok(new { Status = "Success", Message = "User created successfully!" });
+            return Created("Success", new { Status = "Success", Title = "User created successfully!", User = new { user.UserName, user.Email, user.Id } });
         }
 
+
         [HttpPost]
-        [Route("refresh-token")]
+        [Route("Refresh-Token")]
         public async Task<IActionResult> RefreshToken(TokenModel tokenModel)
         {
-
-
             try
             {
                 if (tokenModel is null || string.IsNullOrEmpty(tokenModel.AccessToken) || string.IsNullOrEmpty(tokenModel.RefreshToken))
@@ -140,12 +144,6 @@ namespace RestAPI.Controllers
 
                 return BadRequest("Invalid access token or refresh token");
             }
-
-
-
-
-
         }
     }
-
 }

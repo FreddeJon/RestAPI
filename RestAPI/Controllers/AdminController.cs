@@ -7,7 +7,7 @@ using RestAPI.Auth.Models;
 namespace RestAPI.Controllers
 {
     [Authorize(Roles = ApplicationRoles.Admin)]
-    [Route("api/[controller]")]
+    [Route("Api/[controller]")]
     [ApiController]
     public class AdminController : ControllerBase
     {
@@ -18,7 +18,7 @@ namespace RestAPI.Controllers
             _dbContext = dbContext;
         }
         [HttpGet("Users")]
-        public async Task<IActionResult> GetAllUsers()
+        public IActionResult GetAllUsers()
         {
            return Ok(_dbContext.Users.Select(x => x).ToList());
         }

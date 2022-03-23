@@ -9,26 +9,24 @@ namespace RestAPI.Seeds
     {
         public static async void Initialize(IServiceProvider serviceProvider)
         {
-            using (var scope = serviceProvider.CreateScope())
+            using var scope = serviceProvider.CreateScope();
+            var userManager = scope.ServiceProvider.GetService<UserManager<ApplicationUser>>();
+            var roleManager = scope.ServiceProvider.GetService<RoleManager<IdentityRole>>();
+            var context = scope.ServiceProvider.GetService<ApplicationDbContext>();
+            var configuration = serviceProvider.GetService<IConfiguration>();
+
+            if (userManager is null || roleManager is null || context is null || configuration is null)
             {
-                var userManager = scope.ServiceProvider.GetService<UserManager<ApplicationUser>>();
-                var roleManager = scope.ServiceProvider.GetService<RoleManager<IdentityRole>>();
-                var context = scope.ServiceProvider.GetService<ApplicationDbContext>();
-                var configuration = serviceProvider.GetService<IConfiguration>();
-
-                if (userManager is null || roleManager is null || context is null || configuration is null)
-                {
-                    throw new ArgumentNullException();
-                }
-
-
-                context!.Database.Migrate();
-
-
-                await SeedRoles(roleManager);
-
-                await SeedAdmin(userManager, configuration);
+                throw new ArgumentNullException();
             }
+
+
+            context!.Database.Migrate();
+
+
+            await SeedRoles(roleManager);
+
+            await SeedAdmin(userManager, configuration);
         }
         private static async Task SeedRoles(RoleManager<IdentityRole> roleManager)
         {
