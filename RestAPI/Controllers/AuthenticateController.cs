@@ -40,6 +40,7 @@ namespace RestAPI.Controllers
 
             if (!await _authService.ValidateUser(user, model.Password!)) return Unauthorized();
 
+
             var claims = await _authService.GetClaimsForUser(user);
 
 
@@ -54,6 +55,7 @@ namespace RestAPI.Controllers
 
            _ = await _userManager.UpdateAsync(user);
 
+
             return Ok(new
             {
                 AccessToken = new JwtSecurityTokenHandler().WriteToken(token),
@@ -65,11 +67,11 @@ namespace RestAPI.Controllers
 
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterModel model)
+        public async Task<IActionResult> Register(RegisterModel model)
         {
             var userExists = await _userManager.FindByNameAsync(model.Username);
             if (userExists != null)
-                return StatusCode(StatusCodes.Status500InternalServerError, new ResponseModel { Status = "Error", Message = "User already exists!" });
+                return StatusCode(StatusCodes.Status500InternalServerError, new { Status = "Error", Message = "User already exists!" });
 
             ApplicationUser user = new()
             {
@@ -77,13 +79,18 @@ namespace RestAPI.Controllers
                 SecurityStamp = Guid.NewGuid().ToString(),
                 UserName = model.Username
             };
+
             var result = await _userManager.CreateAsync(user, model.Password);
+
+
             if (!result.Succeeded)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, new ResponseModel { Status = "Error", Message = "User creation failed! Please check user details and try again.", Errors = result.Errors.Select(x => x.Description).ToList() });
+                return StatusCode(StatusCodes.Status500InternalServerError, new { Status = "Error", Message = "User creation failed! Please check user details and try again.", Errors = result.Errors.Select(x => x.Description).ToList() });
             }
 
-            return Ok(new ResponseModel { Status = "Success", Message = "User created successfully!" });
+            await _userManager.AddToRoleAsync(user, UserRoles.User);
+
+            return Ok(new { Status = "Success", Message = "User created successfully!" });
         }
 
         [HttpPost]

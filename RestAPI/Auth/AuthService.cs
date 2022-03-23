@@ -16,16 +16,13 @@ namespace RestAPI.Auth
     public class AuthService : IAuthService
     {
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IConfiguration _configuration;
 
         public AuthService(
             UserManager<ApplicationUser> userManager,
-            RoleManager<IdentityRole> roleManager,
             IConfiguration configuration)
         {
             _userManager = userManager;
-            _roleManager = roleManager;
             _configuration = configuration;
         }
 
@@ -65,7 +62,7 @@ namespace RestAPI.Auth
                     new Claim(JwtRegisteredClaimNames.Email, user.Email),
                     new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                 };
-            userRoles.ToList().ForEach(x => authClaims.Add(new Claim(ClaimTypes.Role, x)));
+            userRoles.ToList().ForEach(role => authClaims.Add(new Claim(ClaimTypes.Role, role)));
 
             return authClaims;
         }
